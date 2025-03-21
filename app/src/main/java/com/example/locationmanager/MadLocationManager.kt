@@ -81,21 +81,6 @@ class MadLocationManager(private val context: Context) : LocationListener, Senso
             🧭 Magnetometer: X=$magnetometerX, Y=$magnetometerY, Z=$magnetometerZ
         """.trimIndent())
 
-        // ✅ Update UI in MainActivity
-       /* mainActivity?.updateGpsData(
-            location.latitude,
-            location.longitude,
-            altitude,
-            speedGps,
-            fusedSpeed,
-            accelerationMagnitude,
-            gyroscopeX,
-            gyroscopeY,
-            gyroscopeZ,
-            magnetometerX,
-            magnetometerY,
-            magnetometerZ // ✅ magZ ต้องถูกส่งมาด้วย
-        )*/
 
 
         // ✅ Send Data to Server
