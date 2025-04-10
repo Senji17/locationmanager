@@ -45,6 +45,15 @@ class MadLocationManager(private val context: Context) : LocationListener, Senso
     private var fusedSpeed = 0.0
     private var accelerationMagnitude = 0.0
 
+
+    private var geomagnetic = FloatArray(3)
+    private var rotationMatrix = FloatArray(9)
+    private var orientationAngles = FloatArray(3)
+
+    private var roll = 0.0
+    private var pitch = 0.0
+    private var yaw = 0.0
+    
     fun setMainActivity(activity: MainActivity) {
         mainActivity = activity
     }
@@ -68,7 +77,6 @@ class MadLocationManager(private val context: Context) : LocationListener, Senso
     override fun onLocationChanged(location: Location) {
         val speedGps = location.speed.toDouble()
         fusedSpeed = alpha * getImuSpeed() + (1 - alpha) * speedGps
-
         val altitude = if (location.hasAltitude()) location.altitude else Double.NaN
 
         // ✅ Log GPS & Sensor Data
@@ -79,6 +87,7 @@ class MadLocationManager(private val context: Context) : LocationListener, Senso
             🔄 IMU: Acceleration=$accelerationMagnitude m/s²
             🔁 Gyroscope: X=$gyroscopeX, Y=$gyroscopeY, Z=$gyroscopeZ
             🧭 Magnetometer: X=$magnetometerX, Y=$magnetometerY, Z=$magnetometerZ
+            
         """.trimIndent())
 
 
@@ -96,17 +105,19 @@ class MadLocationManager(private val context: Context) : LocationListener, Senso
             gyroscopeZ,
             magnetometerX,
             magnetometerY,
-            magnetometerZ
+            magnetometerZ,
+
         )
     }
 
-    private val gravity = FloatArray(3) { 0f }  // ค่าของแรงโน้มถ่วงที่ถูกกรอง
+    private var gravity = FloatArray(3) { 0f }
     private val linearAcceleration = FloatArray(3) { 0f } // ความเร่งจริงที่ต้องการ
 
     override fun onSensorChanged(event: SensorEvent?) {
         event?.let {
             when (it.sensor.type) {
                 Sensor.TYPE_ACCELEROMETER -> {
+                    gravity = it.values.clone() // ✅ ถูกต้อง  สำหรับคำนวณ Orientation
                     val deltaTime = (it.timestamp - lastTimestamp) / 1_000_000_000.0
                     lastTimestamp = it.timestamp
 
@@ -126,13 +137,23 @@ class MadLocationManager(private val context: Context) : LocationListener, Senso
                     gyroscopeZ = it.values[2].toDouble()
                 }
                 Sensor.TYPE_MAGNETIC_FIELD -> {
+                    geomagnetic = it.values.clone()
                     magnetometerX = it.values[0].toDouble()
                     magnetometerY = it.values[1].toDouble()
                     magnetometerZ = it.values[2].toDouble()
                 }
             }
+
+            // ✅ คำนวณ RPY หลังจากรับทั้ง accelerometer และ magnetometer
+            if (SensorManager.getRotationMatrix(rotationMatrix, null, gravity, geomagnetic)) {
+                SensorManager.getOrientation(rotationMatrix, orientationAngles)
+                roll = Math.toDegrees(orientationAngles[2].toDouble())
+                pitch = Math.toDegrees(orientationAngles[1].toDouble())
+                yaw = Math.toDegrees(orientationAngles[0].toDouble())
+            }
         }
     }
+
 
     private fun getImuSpeed(): Double {
         return sqrt(velocityX * velocityX + velocityY * velocityY + velocityZ * velocityZ)
@@ -141,7 +162,8 @@ class MadLocationManager(private val context: Context) : LocationListener, Senso
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
 
     private fun sendDataToServer(
-        latitude: Double, longitude: Double, altitude: Double, speedGps: Double, speedFused: Double, acceleration: Double,
+        latitude: Double, longitude: Double, altitude: Double,
+        speedGps: Double, speedFused: Double, acceleration: Double,
         gyroX: Double, gyroY: Double, gyroZ: Double,
         magX: Double, magY: Double, magZ: Double
     ) {
@@ -160,6 +182,9 @@ class MadLocationManager(private val context: Context) : LocationListener, Senso
                 put("magnetometer_x", magX)
                 put("magnetometer_y", magY)
                 put("magnetometer_z", magZ)
+                put("roll", roll)
+                put("pitch", pitch)
+                put("yaw", yaw)
             })
         }
 
@@ -186,4 +211,5 @@ class MadLocationManager(private val context: Context) : LocationListener, Senso
             }
         })
     }
+
 }
